@@ -1,0 +1,247 @@
+IoT systems are being developed for a wide range of applications and target
+areas~\cite{GubbiBMP13,Atzori20102787}, using a number of different technology stacks~\cite{7123563}.
+%
+Nevertheless, as reported, e.g., in~\cite{Soursos16,Gojmerac16}, IoT
+platforms frequently take the shape of vertical solutions (usually
+dubbed ``IoT islands'') that focus on a specific application domain
+and rely on a single communication technology stack. Such platforms
+provide little support for collaboration and integration. How to
+overcome this limitation is currently a hot topic, tackled also by
+ongoing EU projects, e.g., symbIoTe~\cite{Gojmerac16} and
+bIoTope~\cite{biotope}.
+
+The problem of integration involves many layers, spanning from link-layer
+communication technologies, such as ZigBee and WiFi, to application-layer
+protocols like HTTP, CoAP~\cite{coap,doi:10.17487/RFC7252}, and
+MQTT~\cite{mqtt,mqtt-v3.1.1}, reaching the top-most layers of data-format
+integration~\cite{Milenkovic:2015:CII:2843962.2822643}.
+
+In this work, we tackle the main issues of intercommunication among
+IoT islands, by focusing on integration at both the transport (TCP or
+UDP) and application level. The approach we propose is language based,
+that is, we aim at devising a programming language where different
+communication protocols can seamlessly coexist and
+interoperate. Thanks to proper abstractions provided by the language we
+propose, programmers can easily change the transport and application
+protocols used for a given communication, even at runtime.
+%
+Notably, when the application protocol supports different representation formats
+(such as JSON, XML, etc.) of the message payload, as in the case of HTTP and
+CoAP, the language we propose can automatically marshal and un-marshal data as
+required.
+
+Following our approach, most of the complexity of guaranteeing interoperability
+among protocols is managed by the programming language, and hidden from the
+programmer. This hidden complexity is particularly high when many technologies
+are involved. The problem is exacerbated when one has to replace the technology
+used for some specific interaction. The replacement may be either static, e.g.,
+because of the deployment of new, heterogeneous devices in a pre-existing
+system, or dynamic, e.g., to support a changing topology of disparate mobile
+devices. These are scenarios where our language-based approach can make the
+difference with respect to other approaches.
+
+As an illustrative example, let us consider a scenario where we want to
+integrate two islands of IoT devices, both collecting temperature data, but
+relying on different communication stacks, namely HTTP over TCP and CoAP over
+UDP.
+%
+We want to program a collector that receives temperature measurements from both
+islands and uses them for further elaboration.
+
+In the language we propose, the description of such a collector is divided into
+two parts: a \emph{behavior} specifying the logic of the elaboration and a
+\emph{deployment} describing in a declarative way how communication is
+performed.
+
+The behavior could be of the shape:
+%
+\begin{lstlisting}[numbers=left,basicstyle=\footnotesize\ttfamily]
+main {
+  ...
+  receiveTemperature( data );
+  ...
+}
+\end{lstlisting}
+%
+where Line 3 is a reception statement, expecting a temperature measurement on
+\emph{operation} \code{receiveTemperature} (an operation is an abstraction
+for
+technology-specific concepts such as channels, resources, URLs, \dots) and
+storing it in variable \code{data}.
+
+Once we defined the logic of the collector, we need to specify on which
+technologies the communication happens; in the example above, how the collector
+accepts communications from devices. In our language this information is defined
+within \emph{ports}. For instance, the port for receiving (denoted with keyword
+\code{inputPort}) HTTP measurements can be defined as follows:
+%
+\begin{lstlisting}[numbers=left,basicstyle=\ttfamily\footnotesize]
+interface TemperatureInterface {
+ OneWay: receiveTemperature( string )
+}
+
+inputPort CollectorPort1 {
+ Location: "socket://collector.net:8000"
+ Protocol: http
+ Interfaces: TemperatureInterface
+}
+\end{lstlisting}
+
+Port \code{CollectorPort1} specifies that the collector expects inbound
+communications via \code{Protocol} \code{http} using a TCP/IP socket receiving
+at URL \code{"collector.net"} and on TCP port \code{8000}. The port and the
+operation are linked by the definition of \code{interface} 
+\code{TemperatureInterface}. The interface declares
+the operation \code{receiveTemperature}, including the type of expected
+data (\code{string}), as a \code{OneWay} operation, namely an
+asynchronous communication that does not require any reply from the collector.
+
+Thanks to port \code{CollectorPort1}, the collector can receive data from the
+HTTP island. To integrate the second island, we just need to define an
+additional port, similar to \code{CollectorPort1}, except for using UDP/IP
+datagrams at the transport layer and CoAP at the application layer. Hence, the
+whole code of the collector becomes:
+%
+\begin{lstlisting}[%
+  basicstyle=\footnotesize\ttfamily,
+  label=temperature_interface, 
+  caption=Code of the Collector Example.]
+interface TemperatureInterface {
+  OneWay: receiveTemperature( string )
+}
+
+inputPort CollectorPort1 {
+  Location: "socket://collector.net:8000"
+  Protocol: http
+  Interfaces: TemperatureInterface
+}
+
+inputPort CollectorPort2 {
+  Location: "datagram://coap.me:5683"
+  Protocol: coap
+  Interfaces: TemperatureInterface
+}
+
+main {
+  receiveTemperature( data );
+}
+\end{lstlisting}
+%
+The example above highlights how, using the proposed language abstractions, the
+programmer can write a unique behavior and exploit it to receive data sent over
+disparate technology stacks. Clearly, one can define different operations for
+different technologies, if the required elaborations differ. Our language
+supports both inbound and outbound communications, the latter declared with
+\code{outputPort}s, whose structure follows that of \code{inputPort}s. In
+addition, we let programs change the \code{Location} and \code{Protocol} of its
+\code{outputPort}s at runtime, enabling the selection of the appropriate
+technologies for each context.
+
+\subsection{Our contribution}
+\label{sub:aim_of_research}
+
+To enable the programming of IoT integration in the above style, we do not start
+from scratch, but we leverage the work done in the area of Service-Oriented
+Architectures (SOAs)~\cite{Erl07} and, in particular, we build on the Jolie
+programming language~\cite{MONTESI200719,MGZ07,jolie-lang}. Indeed, the example
+above uses the Jolie syntax and abstraction mechanisms.
+
+As mentioned, Jolie enforces a strict separation of concerns between behavior,
+describing the logic of the application, and deployment, describing the
+communication capabilities. The behavior is defined using the typical constructs
+of structured sequential programming, communication primitives, and operators to
+deal with concurrency (parallel composition and input choice).
+
+Jolie communication primitives comprise two modalities of
+interaction. Outbound \code{OneWay} communications send a message
+asynchronously, while \code{RequestResponse} communications send a message
+and wait for a reply (they capture the well-known pattern of request-response
+interactions~\cite{req-rep}). Dually, inbound \code{OneWay}
+communications wait for a message, while \code{RequestResponse}
+communications wait for a message and send back a reply.
+
+A main feature of the Jolie language, and the reason why we base our approach on
+it, is that it allows one to switch among many communication media (via keyword
+\code{Location}) and data protocols (via keyword \code{Protocol}) in a simple,
+uniform way.
+%
+%Indeed, for each communication port the used medium and data protocol
+%are declared in the \emph{deployment} part of the program.  In order
+%to change the used medium and protocol one just needs to change the
+%declaration, without affecting the \emph{behaviour} part, which
+%describes the actual computation. Hence, functionalities defined by a
+%single behaviour can be made available using different media and
+%protocols by specifying different deployments.
+Being born in the field of SOAs, Jolie supports the main communication media
+(TCP/IP sockets, Bluetooth L2CAP, Java RMI, and Unix local sockets) and data
+protocols (HTTP, JSON-RPC, XML-RPC, SOAP and their respective SSL versions) from
+this area.
+
+We think that the ability to use different communication modalities in a uniform
+way and to easily switch between them is very useful in the area of IoT.
+However, to make this approach practical, we also need to support the main
+communication stacks used in the IoT setting. Indeed, the main technical
+contribution of the present paper is the introduction in Jolie of the support
+for two application protocols relevant in the IoT scenario, namely
+CoAP~\cite{doi:10.17487/RFC7252,coap} and MQTT~\cite{mqtt-v3.1.1,mqtt}.
+
+Even if Jolie provides support for easy integration of new protocols, the task
+is non trivial. Indeed, all the protocols currently integrated in Jolie 
+support the same internal interface, based on two assumptions:
+\emph{i}) the usage of underlying technologies that ensure reliable
+communications and \emph{ii}) a point-to-point communication pattern.
+
+However, both these assumptions fall when considering the two IoT technologies
+we integrate:
+
+\begin{itemize}
+  \item CoAP communications can be unreliable since they
+are based on UDP connectionless datagrams. CoAP provides options for reliable
+communications, however these are usually disabled in an IoT setting, since
+battery and bandwidth preservation is important.
+
+\item MQTT communications are based on the publish-subscribe
+paradigm, which contrasts with Jolie point-to-point communication primitives.
+Hence, we need to define a mapping of the general abstractions of the Jolie
+language into the publish-subscribe paradigm, balancing two factors: \emph{i})
+preserving the simplicity of the point-to-point communication style and
+\emph{ii}) capturing the typical flow of communications as programmed in a
+publish-subscribe style. An evident example of the challenges of our mapping is
+the implementation of request-response communications on top of
+publish-subscribe interactions. Remarkably, the mapping that we present in this
+work is general and could be used also in other contexts.
+
+\end{itemize}
+
+The flexibility provided by Jolie can be used to support and interconnect
+multiple IoT islands, as discussed above. Jolie supports also more advanced
+scenarios where the selection of the protocol to use changes according to
+internal or environmental conditions, such as available energy or quality of
+communication, but of course this requires some capability of switching the
+protocol also from the side of the Things, which may not be the case in many
+practical situations.
+
+Indeed, in the rest of the paper, we omit to model IoT devices --- like Arduino
+and other microcontrollers --- that are at the edge of the network, since they
+are normally programmed by using low-level languages.  In principle, these
+devices could be programmed by using Jolie-like languages, possibly extending
+them to provide those low-level abstractions needed by programmers to access the
+in-board sensors and actuators.  However, the constraints on the hardware and
+the usually limited amount of energy available to edge devices require a
+low-footprint, lightweight execution environment.  Although these requirements
+could be achievable also for a language like Jolie, this would require a strong
+engineering effort, which is not considered in this paper. We argue that this
+direction of work is not urgent, since currently developers tend to program very
+simple behaviors for edge devices~\cite{7123563}, which usually capture some
+data (e.g., through one of their sensors) and then send them to other devices
+(gateways, aggregators, servers). These other devices have more powerful
+hardware and less constraints on energy consumption, and can then implement the
+logic for the data processing. Hence, here we neglect the programming of edge
+devices
+%
+%would require a considerable change in the actual patterns of interactions that
+%are currently by developers. In fact,
+%
+and we focus on those devices that can both host the Jolie
+runtime and whose topological context can benefit from the
+flexibility offered by the language.

@@ -1,0 +1,217 @@
+The \textit{Constrained Application Protocol}
+(CoAP)~\cite{coap,doi:10.17487/RFC7252} is a specialized web transfer protocol
+for constrained scenarios where nodes have low power and networks are lossy. The
+goal of CoAP is to import the widely adopted model of REST
+architectures~\cite{fielding00} into an IoT setting, that is, optimizing it for
+Machine-to-Machine applications. In particular, CoAP makes use of GET, PUT,
+POST, and DELETE methods like HTTP.
+%
+Following the RFC~\cite{doi:10.17487/RFC7252}, CoAP is implemented on top of the
+UDP transport protocol~\cite{UDP}, with optional reliability. Indeed, CoAP
+provides two communication modalities: a reliable one, obtained by marking the
+message type as confirmable (CON), and an unreliable one, obtained by marking the
+message type as non confirmable (NON).
+
+As an example, we consider a scenario with a controller, programmed in Jolie,
+that communicates with one of many thermostats in a home automation scenario.
+Thermostats are accessible at the generic address
+\code{"coap://thermostat/##"} where \code{"##"} is a two-digit number
+representing the identifier of a specific device. Thermostats accept two
+interactions: a GET request on URI \code{"coap://thermostat/##/getTemperature"},
+that returns the current temperature, and a POST
+request on URI \code{"coap://thermostat/##/setTemperature"}, that sets the
+temperature of the HVAC system.
+%
+We report and comment below the code of a possible Jolie controller.
+ % thatinteracts with a specific thermostat.
+
+\begin{lstlisting}[
+basicstyle=\footnotesize\ttfamily,
+label=lst:coap_example,
+caption=Jolie controller communicating over CoAP/UDP.]
+type TmpType: void { .id: string } | int { .id: string }
+
+interface ThermostatInterface {
+  RequestResponse: getTmp( TmpType )( int )
+  OneWay: setTmp( TmpType )
+}
+
+outputPort Thermostat {
+ Location: "datagram://thermostat:5683"
+ Protocol: coap {
+  .osc.getTmp << {
+    .messageCode = "GET"
+    .alias = "/%!{id}/getTemperature",
+  };
+  .osc.setTmp << {
+    .contentFormat = "text/plain",
+    .alias = "/%!{id}/setTemperature",
+    .messageCode = "POST"
+  }
+ }
+ Interfaces: ThermostatInterface
+}
+
+main {
+ getTmp@Thermostat( { .id = "42" } )( temp );
+ if ( temp > 27 ){
+  setTmp@Device( 24 { .id = "42" } )
+ } else if ( temp < 15 ){
+  setTmp@Device( 22 { .id = "42" } )
+ }
+}
+\end{lstlisting}
+
+Our scenario uses two CoAP resources: \code{"/getTemperature"} and
+\code{"/setTemperature"}. 
+We model them in Jolie at lines 3--6
+of \cref{lst:coap_example}, by defining the \code{interface}
+\code{ThermostatInterface}, which includes a
+\code{RequestResponse} operation \code{getTmp}, representing resource
+\code{"/getTemperature"}, and a \code{OneWay} operation
+\code{setTmp}, representing resource \code{"/setTemperature"}.
+%
+By default, we map operation names to resource names, hence in our example we
+would need resources named \code{"/getTmp"} and
+\code{"/setTmp"} respectively. However, as described below, one
+could override the default mapping, defining the coupling of protocol-specific
+concepts (here CoAP resources) and operations inside ports. In this way,
+programmers can define interactions at a high level with interfaces, while the
+grounding to the specific case is done in the deployment.
+% 
+% Here we purposefully choose to use operation names that differ from resource
+% names to underline that the two concepts are related but loosely coupled.
+
+At lines 8--24 we define an \code{outputPort} to interact with the
+\code{Thermostat}.
+%
+At line 9 we specify the \code{Location} of the thermostat. Recalling that
+the scheme of the resources of the thermostats is
+\code{"coap://thermostat/##/..."}, we define the \code{Location} of
+the port using the UDP \code{"datagram://"} protocol, followed by the
+first part of the resource schema \code{"thermostat"} and the UDP port on
+which it accepts requests. Here we assume thermostats to use CoAP standard UDP
+port, which is \code{"5683"}. Note that, in the \code{Location}, we do
+not define the address of a specific thermostat, e.g.,
+\code{"datagram://thermostat:5683/42"}. On the contrary, we just specify
+the generic address to access thermostats in the system, while the specific
+binding will be done at runtime, thanks to the \code{.alias} parameter of
+the \code{coap} protocol, described later on.
+
+At line 10 we define \code{coap} to be the protocol used by the 
+\code{outputPort}. At lines 11--21 we specify some parameters of the
+\code{coap} protocol --- this matches the standard way in which Jolie defines
+parameters for \code{Protocol}s in ports.
+
+Here, we follow the methodology presented in~\cite{montesi16} for the
+implementation of the HTTP protocol in Jolie --- indeed CoAP adopts HTTP naming
+schema and resource interaction methods. In particular, we draw
+from~\cite{montesi16} the parameter prefix \code{.osc}, whose name is the
+acronym of ``operation-specific configuration'' and which is used for
+configuration parameters related to a specific operation.
+
+In the example, we define \code{.osc} parameters for both operations
+\code {getTmp} and \code{setTmp}.\@ At line 15 we specify that the CoAP method used is \code{GET}. At
+line 14 we define, using the \code{.contentFormat} parameter, that the encoding of
+the payload of the message in a binary format (\code{"text/plain"}).
+Other accepted values for the
+\code{.contentFormat} parameter are \code{"json"} and \code{"xml"}. Marshalling and
+un-marshalling is automatic and transparent to the programmer. This feature is
+enabled by the structure of Jolie variables, which are always tree-shaped, hence
+they can easily be translated into representations based on that shape. At line
+15, following the practice introduced in~\cite{montesi16}, we specify that
+\code{getTemp} \code{alias}es a resource whose path concatenates a static part,
+given by the \code{Location}, and the instantiation of the template
+\lstinline|"/%!{id}/getTemperature"| provided by protocol parameter
+\code{.alias}. The template is instantiated using values from the parameter of
+the operation invocation in the behavior, e.g., value \code{42} at line
+27\footnote{In Jolie the dot \code{.} defines path traversals inside trees.
+Hence, the notation \code{\{.id = 42\}} indicates a tree with an empty root and
+a subnode called \code{id}, whose value is \code{42}.}. Hence, the
+interpretation of the declaration at line 15 is that, when invoking operation
+\code{getTmp} at runtime, the element \code{id} of the invocation will be
+removed from the payload and used to form the address of the requested resource.
+The aliasing for operation \code{setTmp} (line 20) is similar to that of
+\code{getTmp}, while the operation use
+method \code{POST}. Since here the \code{.contentFormat} parameter is omitted, the
+default \code{"text/plain"} is used.
+
+To conclude, we briefly comment the runtime execution of the example, described
+in the behavior at lines 26--33. At line 27 the controller invokes operation
+\code{getTmp}. Being an outgoing \code{RequestResponse}, the
+invocation defines on which port to perform the request (\code{Thermostat})
+and presents two pairs of round brackets: the first contains the data for the
+request, the second points to the variable that will store the received
+response. Recalling the aliasing defined at line 15, at line 27 we define the
+value of element \code{id = 42}, thus the URI of the resource invoked at
+runtime is \code{"coap://thermostat/42/getTemperature"}. Notably, in the
+example we hard-coded the \code{id} of the device, however in a realistic
+setting the value of \code{id} would be retrieved from a variable. Once
+received, the response from thermostat \code{42} is assigned to variable
+\code{temp}. The example concludes with a conditional in which, if the
+temperature is above \code{27} (line 28), the thermostat is set to lower room
+temperature to \code{24} degrees, while, if the temperature lies below \code
+{15} degrees, the thermostat is set to raise the temperature to \code{22}
+degrees.
+
+Dually to \code{outputPort}s, \code{inputPort}s allow the programmer
+to specify inbound communications. The parameters described above are valid also
+for \code{inputPort}s, with the only difference that
+\code{messageType} works only for \code{RequestResponse}s, and
+specifies whether the communication of the reply is reliable or not. 
+%
+Note that, concerning the \code{.alias} parameter, the template is instantiated
+using the address of the incoming communication and the values are inserted
+among the elements of the payload.
+
+\subsection{Implementation of CoAP/UDP in Jolie} % (fold)
+%
+We end this section reporting the most relevant issues met during the
+implementation in Jolie of the CoAP/UDP stack.
+%
+In Jolie the implementations of the supported application and transport
+protocols are independent. This enables the composition of any transport
+protocol with any application protocol. In particular, the implementation of UDP
+that we provide can also be used to support other protocols relying on UDP like
+MQTT-SN~\cite{hunkeler08}. For this reason, we separately
+present the integration in Jolie of UDP and of CoAP.
+
+Concretely, the Jolie language is written in Java and provides proper abstract
+classes that represent application and transport protocols. Each protocol is
+obtained as an implementation of the corresponding abstract classes. Each
+implementation is a separated module which is loaded only if the protocol is
+used. This expedites the integration of new protocols in the language.
+
+%
+The implementation of UDP consists in a listener and a
+sender class, both based on the Netty framework~\cite{maurer16}.
+Since the structure expected by Jolie and the one provided by Netty are similar,
+the integration of UDP is smooth. 
+% An interesting point is that exceptions raised by Netty are captured
+% and transformed into Jolie exceptions. These exceptions are notified to the
+% application protocol, which can either manage them or raise them at the level of
+% the behavior of the Jolie program.
+
+The implementation of CoAP consists in a unique class, taking care
+of both encoding and decoding messages, and is based on nCoAP~\cite{ncoap}.
+% an extension of the Netty framework. Also in this case the integration is
+% smooth.
+
+We notice that CoAP supports request-response communications and, in particular,
+CoAP messages include fields \emph{i}) to specify at which address the reply is
+expected and \emph{ii}) to match a reply with a previous request. Hence, the
+implementation of \code{RequestResponse} communications in CoAP is sound
+also with a transport protocol which is not connection-oriented, such as UDP.\@
+This would be a problem for protocols that do not provide such a facility, such
+as HTTP, which is indeed not commonly used over UDP.
+
+Notably, Jolie comes with a formal semantics (in terms of a process
+calculus)~\cite{Guidi2006}, which enables to rigorously reason on the behavior
+of Jolie programs. 
+% This has been instrumental in the
+% evolution of the language, e.g., to specify and prove properties on the fault
+% handling mechanisms of the language~\cite{GuidiLMZ09} or to correctly implement
+% sessions\cite{MontesiC11} based on correlation mechanisms\cite{bpel}. 
+The semantics in~\cite{Guidi2006} only considers reliable communications and
+needs to be extended to also cover the unreliable case. We do not report here on
+this topic, since it is not central for the purpose of this paper.

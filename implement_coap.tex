@@ -1,0 +1,54 @@
+The implementation of CoAP in Jolie has to cover, mainly, the support for UDP. 
+
+We will try to address all the problem and the relative adopted solution that a packet going form a client to a server can encounter on the road.
+
+We distinguish two cases: the first one is the One-Way request, the second one is a Request-Response.
+
+A One-Way request to a CoAP resource can be send with a Confirmable packet (CON), or a Non-Confirmable packet (NON).
+
+First we will focus on the single request scenario.
+\begin{itemize}
+    \item In the CON case we have to handle two possible outcomes,
+    \begin{enumerate}
+        \item Loss of a packet - As CON is a reliable implementation of CoAP packet that are lost will be retransmitted with the same Message ID.
+        \item Corruption of a packet - since UDP does not handle corruption it has been implemented checksum control of the packet and application level. 
+    \end{enumerate}
+    \item In the NON case,
+    \begin{enumerate}
+        \item Loss of a packet - As state in the CoAP RFC ``At the CoAP level, there is no way for the sender to detect if a Non-Confirmable message was received or not''. Thus we implemented the possibility to send duplicate of the packet over a given time -- i.e. the timeout; 
+        \item Corruption of a packet - same as the CON case
+    \end{enumerate}
+\end{itemize}
+
+CoAP already support the Request-Response mechanism as stated in the RFC 7252 in section 2.2. This case is mapped as a combination of the single request and observation of a resource. In both cases we use a Confirmable flag to send payloads. Moreover, starting with a GET request of a CoAP resource (temperature in the above figure), it is possible to send the response to the requested address (that is contained in the payload of the message -- the token in the above example). With respect to the single request cases, it is required the additional parameter, into the payload of the request, containing the local port where to receive the response from the server.
+
+In the Request-Response scenario CoAP mimes HTTP, although UDP is a connection-less protocol.
+
+\begin{quote}
+CoAP operates under a similar request/response model as HTTP: a CoAP 
+endpoint in the role of a "client" sends one or more CoAP requests to
+a "server", which services the requests by sending CoAP responses.
+Unlike HTTP, requests and responses are not sent over a previously
+established connection but are exchanged asynchronously over CoAP
+messages.
+\end{quote}
+
+\begin{verbatim}
+Client              Server
+   |   CON [0x7a10]   |
+   | GET /temperature |
+   |   (Token 0x73)   |
+   +----------------->|
+   |                  |
+   |   ACK [0x7a10]   |
+   |<-----------------+
+   |                  |
+   |   CON [0x23bb]   |
+   |   2.05 Content   |
+   |   (Token 0x73)   |
+   |     "22.5 C"     |
+   |<-----------------+
+   |                  |
+   |   ACK [0x23bb]   |
+   +----------------->|
+\end{verbatim}

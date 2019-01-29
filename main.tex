@@ -1,0 +1,107 @@
+\documentclass[letterpaper,10pt,final,compsoc]{IEEEtran}
+
+\usepackage[%total={6.5in,8.75in},
+left=1in,
+right=1in,
+top=1in,
+bottom=2.86cm, 
+columnsep=.81cm
+]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{mathptmx}
+\let\proof\relax\let\endproof\relax\usepackage{amsthm}
+\let\labelindent\relax\usepackage{enumitem}% NEEDED TO MAKE HYPERREF LIKE REFERENCES
+\makeatletter
+\let\NAT@parse\undefined
+\makeatother
+\usepackage{ragged2e}
+\usepackage[bookmarks=false,colorlinks,urlcolor=blue,%
+linkcolor=magenta,citecolor=red,linktocpage=true,breaklinks=true]{hyperref}
+\usepackage{xspace}
+\usepackage{graphics}
+\usepackage{inconsolata}
+\usepackage{cleveref}
+\usepackage{xcolor}
+\usepackage{fancyvrb}
+\usepackage{listings}
+\usepackage{xparse}
+\usepackage{tikz}
+\usetikzlibrary{arrows}
+\usepackage{pgf-umlsd}
+
+\include{macros}
+
+\author{Maurizio Gabbrielli, Saverio Giallorenzo, Ivan Lanese, and Stefano Pio
+Zingaro 
+\\
+Universit\`a di Bologna / INRIA \\
+{\underline{maurizio.gabbrielli@unibo.it}, 
+  \underline{ saverio.giallorenzo@gmail.com},}\\
+  {\underline{ivan.lanese@gmail.com},
+  \underline{stefanopio.zingaro@unibo.it}
+  } \\
+}
+
+\title{\LARGE \bf A Language-based Approach \\ for Interoperability of IoT
+Platforms}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+\normalfont\itshape The Internet of Things (IoT) promotes the communication
+among heterogeneous entities, from small sensors to Cloud systems. However,
+this is realized using a wide range of communication media and data protocols,
+usually incompatible with each other. Thus, IoT systems tend to grow as
+homogeneous isolated platforms, which hardly interact. To achieve a higher
+degree of interoperability among disparate IoT platforms, we propose a
+language-based approach for communication technology integration. We build on
+the Jolie programming language, which allows programmers to easily make the
+same logic work over disparate communication stacks in a declarative, dynamic
+way. Jolie currently supports the main technologies from Service-Oriented
+Computing, such as TCP/IP, Bluetooth, and RMI at transport level, and HTTP and
+SOAP at application level. As technical result, we integrate in Jolie the two
+most adopted protocols for IoT communication, i.e., CoAP and MQTT. In this
+paper, we report our experience and we present high-level concepts valuable
+both for the general implementation of interoperable systems and for the
+development of other language-based solutions.
+\end{abstract}
+
+\section{Introduction}
+\label{sec:intro}
+\input{intro}
+
+\section{Jolie for IoT}
+\label{sec:challenges}
+\input{challenges}
+
+\section{Supporting CoAP in Jolie}
+\label{sub:coap}
+\input{coap}
+
+\section{Supporting MQTT in Jolie}
+\label{sub:mqtt}
+\input{mqtt}
+
+\section{Related Work}
+\label{sec:related}
+\input{related}
+
+\section{Discussion and Conclusion}
+\label{conclusion}
+\input{conclusion}
+
+\subsubsection*{Acknowledgments} % (fold)
+We thank Marco Di Felice, Luca Bedogni, and Federico Montori for useful
+suggestions and comments.
+
+% section section_name (end)
+
+% \vspace{5em}
+
+\bibliographystyle{ieeetr}
+{\bibliography{biblio}}
+
+\end{document}
